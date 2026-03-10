@@ -3745,8 +3745,7 @@ local v466 = vu32:MakeWindow({
 
 -- ===== REDZ HUB PATCHES =====
 
--- [PATCH 1] Màu chủ đề (mặc định hồng) - hook ngay khi UI tạo ra
-_G.RedzThemeColor = Color3.fromRGB(255, 105, 180)
+-- [PATCH 1] Màu chủ đề (mặc định hồng)
 local ThemeColors = {
     ["Pink"]   = Color3.fromRGB(255, 105, 180),
     ["Blue"]   = Color3.fromRGB(80, 160, 255),
@@ -3756,156 +3755,80 @@ local ThemeColors = {
     ["Orange"] = Color3.fromRGB(255, 140, 0),
     ["Gray"]   = Color3.fromRGB(160, 160, 160),
 }
+_G.RedzThemeColor = ThemeColors["Pink"]
 
-local COLOR_NAMES = {"ActiveColor","ToggleOn","ActiveBG","Indicator","ActiveBtn","ToggleBall","Selected","ActiveIndicator","Active"}
-
-local function IsColorTarget(obj)
-    for _, n in ipairs(COLOR_NAMES) do
-        if obj.Name == n then return true end
-    end
-    return false
-end
-
-local function ApplyColorToObj(obj, color)
+local function ApplyThemeColor(color)
+    _G.RedzThemeColor = color
+    -- Áp dụng màu lên tất cả các toggle/button đang bật trong UI
     pcall(function()
-        if obj:IsA("Frame") or obj:IsA("TextButton") or obj:IsA("ImageButton") or obj:IsA("ImageLabel") then
-            if IsColorTarget(obj) then
-                obj.BackgroundColor3 = color
-                pcall(function() obj.ImageColor3 = color end)
+        local gui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not gui then return end
+        for _, obj in pairs(gui:GetDescendants()) do
+            if obj:IsA("Frame") or obj:IsA("TextButton") then
+                if obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG" or obj.Name == "Indicator" then
+                    obj.BackgroundColor3 = color
+                end
+                if obj:IsA("TextButton") and obj.Name == "ActiveBtn" then
+                    obj.BackgroundColor3 = color
+                end
+            end
+            if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                obj.Color = color
             end
         end
-        if obj:IsA("UIStroke") then
-            obj.Color = color
-        end
     end)
 end
 
-local function ApplyThemeToAll()
-    local color = _G.RedzThemeColor
-    local guiParents = {game:GetService("CoreGui")}
-    pcall(function()
-        table.insert(guiParents, game:GetService("Players").LocalPlayer.PlayerGui)
-    end)
-    for _, guiParent in ipairs(guiParents) do
-        for _, gui in ipairs(guiParent:GetChildren()) do
-            pcall(function()
-                for _, obj in ipairs(gui:GetDescendants()) do
-                    ApplyColorToObj(obj, color)
-                    if obj.Name == "RedzTabIndicator" and obj:IsA("Frame") then
-                        obj.BackgroundColor3 = color
-                    end
-                end
-            end)
-        end
-    end
-end
-
--- Hook DescendantAdded để bắt màu ngay khi UI tạo ra
-task.spawn(function()
-    local ok1, playerGui = pcall(function()
-        return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
-    end)
-    local coreGui = game:GetService("CoreGui")
-    
-    local function hookGui(guiParent)
-        if not guiParent then return end
-        guiParent.DescendantAdded:Connect(function(obj)
-            task.wait()
-            ApplyColorToObj(obj, _G.RedzThemeColor)
-        end)
-    end
-    
-    hookGui(coreGui)
-    if ok1 and playerGui then
-        hookGui(playerGui)
-    end
-end)
-
--- Cũng apply sau 1s và 3s để chắc chắn
-task.delay(1, ApplyThemeToAll)
-task.delay(3, ApplyThemeToAll)
-task.delay(6, ApplyThemeToAll)
-
--- [PATCH 2] Fix window bị kéo lên trên / ra ngoài màn hình
+-- [PATCH 2] Fix window bị kéo ra ngoài màn hình
 task.spawn(function()
     task.wait(2)
     pcall(function()
-        local UIS = game:GetService("UserInputService")
-        local cam = workspace.CurrentCamera
-
-        -- Tìm main frame của UI theo nhiều cách
-        local function findMainFrame()
-            for _, guiParent in ipairs({game:GetService("CoreGui"), game:GetService("Players").LocalPlayer.PlayerGui}) do
-                for _, gui in ipairs(guiParent:GetChildren()) do
-                    if gui:IsA("ScreenGui") then
-                        for _, child in ipairs(gui:GetChildren()) do
-                            if child:IsA("Frame") and child.Size.X.Scale > 0.1 then
-                                return child
-                            end
-                        end
-                        local f = gui:FindFirstChildOfClass("Frame")
-                        if f then return f end
-                    end
-                end
-            end
-        end
-
-        local mainFrame = findMainFrame()
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+        local mainFrame = screenGui:FindFirstChildOfClass("Frame")
         if not mainFrame then return end
 
-        local isDragging = false
-        -- Detect drag start
-        mainFrame.InputBegan:Connect(function(input)
+        -- Clamp vị trí khi buông chuột
+        local UserInputService = game:GetService("UserInputService")
+        UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                isDragging = true
-            end
-        end)
-
-        UIS.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 and isDragging then
-                isDragging = false
-                task.wait(0.02)
+                task.wait(0.05)
                 pcall(function()
-                    local vp = cam.ViewportSize
-                    local sz = mainFrame.AbsoluteSize
-                    local ap = mainFrame.AbsolutePosition
-                    -- Clamp: không cho lên trên 0, không ra ngoài màn hình
-                    local clampedX = math.clamp(ap.X, 0, math.max(0, vp.X - sz.X))
-                    local clampedY = math.clamp(ap.Y, 0, math.max(0, vp.Y - sz.Y))
-                    mainFrame.Position = UDim2.fromOffset(clampedX, clampedY)
+                    local vp = workspace.CurrentCamera.ViewportSize
+                    local pos = mainFrame.Position
+                    local absSize = mainFrame.AbsoluteSize
+                    local newX = math.clamp(pos.X.Offset, 0, vp.X - absSize.X)
+                    local newY = math.clamp(pos.Y.Offset, 0, vp.Y - absSize.Y)
+                    mainFrame.Position = UDim2.new(0, newX, 0, newY)
                 end)
-            end
-        end)
-
-        -- Continuous guard: mỗi 0.1s kiểm tra nếu frame bị kéo ra ngoài
-        task.spawn(function()
-            while true do
-                task.wait(0.1)
-                if not isDragging then
-                    pcall(function()
-                        local vp = cam.ViewportSize
-                        local sz = mainFrame.AbsoluteSize
-                        local ap = mainFrame.AbsolutePosition
-                        if ap.Y < 0 or ap.X < 0 or ap.X + sz.X > vp.X or ap.Y + sz.Y > vp.Y then
-                            local clampedX = math.clamp(ap.X, 0, math.max(0, vp.X - sz.X))
-                            local clampedY = math.clamp(ap.Y, 0, math.max(0, vp.Y - sz.Y))
-                            mainFrame.Position = UDim2.fromOffset(clampedX, clampedY)
-                        end
-                    end)
-                end
             end
         end)
     end)
 end)
 
--- [PATCH 3] Tab indicator (dấu gạch)
+-- [PATCH 3] Dấu gạch tab indicator + màu hồng toggle
 task.spawn(function()
-    task.wait(3)
+    task.wait(2)
     pcall(function()
-        local lastIndicator = nil
-        for _, guiParent in ipairs({game:GetService("CoreGui"), game:GetService("Players").LocalPlayer.PlayerGui}) do
-            for _, gui in ipairs(guiParent:GetDescendants()) do
-                if (gui:IsA("TextButton") or gui:IsA("Frame")) and gui.Parent and gui.Parent.Name and string.find(string.lower(gui.Parent.Name), "tab") then
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+
+        -- Đổi màu toggle đang bật thành màu chủ đề
+        for _, obj in pairs(screenGui:GetDescendants()) do
+            if (obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG") and (obj:IsA("Frame") or obj:IsA("TextButton")) then
+                obj.BackgroundColor3 = _G.RedzThemeColor
+            end
+            if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                obj.Color = _G.RedzThemeColor
+            end
+        end
+
+        -- Dấu gạch trước tab được chọn
+        local tabList = screenGui:FindFirstChild("TabList", true)
+        if tabList then
+            local lastIndicator = nil
+            for _, tabBtn in pairs(tabList:GetChildren()) do
+                if tabBtn:IsA("TextButton") or tabBtn:IsA("Frame") then
                     local indicator = Instance.new("Frame")
                     indicator.Name = "RedzTabIndicator"
                     indicator.Size = UDim2.new(0, 4, 0.7, 0)
@@ -3913,20 +3836,18 @@ task.spawn(function()
                     indicator.BackgroundColor3 = _G.RedzThemeColor
                     indicator.BorderSizePixel = 0
                     indicator.Visible = false
-                    indicator.ZIndex = gui.ZIndex + 2
+                    indicator.ZIndex = tabBtn.ZIndex + 1
                     local corner = Instance.new("UICorner")
                     corner.CornerRadius = UDim.new(0, 3)
                     corner.Parent = indicator
-                    indicator.Parent = gui
+                    indicator.Parent = tabBtn
 
-                    if gui:IsA("TextButton") then
-                        gui.MouseButton1Click:Connect(function()
-                            if lastIndicator then lastIndicator.Visible = false end
-                            indicator.Visible = true
-                            indicator.BackgroundColor3 = _G.RedzThemeColor
-                            lastIndicator = indicator
-                        end)
-                    end
+                    tabBtn.MouseButton1Click:Connect(function()
+                        if lastIndicator then lastIndicator.Visible = false end
+                        indicator.Visible = true
+                        indicator.BackgroundColor3 = _G.RedzThemeColor
+                        lastIndicator = indicator
+                    end)
                 end
             end
         end
@@ -4052,9 +3973,37 @@ v485:AddDropdown({
     Options = {"Pink", "Blue", "Yellow", "Red", "Purple", "Orange", "Gray"},
     Default = "Pink",
     Callback = function(colorName)
+        local ThemeColors = {
+            ["Pink"]   = Color3.fromRGB(255, 105, 180),
+            ["Blue"]   = Color3.fromRGB(80, 160, 255),
+            ["Yellow"] = Color3.fromRGB(255, 220, 50),
+            ["Red"]    = Color3.fromRGB(220, 60, 60),
+            ["Purple"] = Color3.fromRGB(160, 80, 220),
+            ["Orange"] = Color3.fromRGB(255, 140, 0),
+            ["Gray"]   = Color3.fromRGB(160, 160, 160),
+        }
         local color = ThemeColors[colorName] or ThemeColors["Pink"]
         _G.RedzThemeColor = color
-        ApplyThemeToAll()
+
+        -- Áp dụng màu lên toàn bộ UI
+        pcall(function()
+            local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib")
+                or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+            if not screenGui then return end
+            for _, obj in pairs(screenGui:GetDescendants()) do
+                if (obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG" or obj.Name == "Indicator") and (obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("TextButton")) then
+                    obj.BackgroundColor3 = color
+                end
+                if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                    obj.Color = color
+                end
+                -- Cập nhật tab indicator
+                if obj.Name == "RedzTabIndicator" and obj:IsA("Frame") then
+                    obj.BackgroundColor3 = color
+                end
+            end
+        end)
+
         if vu32 and vu32.Notify then
             vu32:Notify({Title = "Theme", Content = "Đã đổi màu sang: " .. colorName, Duration = 3})
         end
@@ -4225,23 +4174,43 @@ spawn(function()
                             StartBring = false
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
                         else
+                            -- Multi-mob: gom tối đa theo BringMobCount
+                            local MAX_MOBS = _G.BringMobCount or 6
+                            local activeMobs = {}
                             for _, mob in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                                if #activeMobs >= MAX_MOBS then break end
                                 if mob.Name == MonNew and mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
-                                    repeat
-                                        task.wait()
-                                        EquipWeapon(_G.SelectWeapon)
-                                        AutoHaki()
-                                        topos(mob.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                                        mob.HumanoidRootPart.CanCollide = false
-                                        mob.Humanoid.WalkSpeed = 0
-                                        mob.Head.CanCollide = false
-                                        mob.HumanoidRootPart.Size = Vector3.new(70, 70, 70)
-                                        StartBring = true
-                                        MonFarm = mob.Name
-                                        game:GetService("VirtualUser"):CaptureController()
-                                        game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
-                                    until not _G.AutoFarm or mob.Humanoid.Health <= 0 or not mob.Parent or not questGui.Visible
+                                    table.insert(activeMobs, mob)
                                 end
+                            end
+                            if #activeMobs > 0 then
+                                local centerMob = activeMobs[1]
+                                repeat
+                                    task.wait()
+                                    EquipWeapon(_G.SelectWeapon)
+                                    AutoHaki()
+                                    -- Gom tất cả mob về 1 điểm
+                                    for _, mob in ipairs(activeMobs) do
+                                        if mob and mob.Parent and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
+                                            mob.HumanoidRootPart.CFrame = centerMob.HumanoidRootPart.CFrame
+                                            mob.HumanoidRootPart.CanCollide = false
+                                            mob.Humanoid.WalkSpeed = 0
+                                            mob.Head.CanCollide = false
+                                        end
+                                    end
+                                    topos(centerMob.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
+                                    StartBring = true
+                                    MonFarm = centerMob.Name
+                                    game:GetService("VirtualUser"):CaptureController()
+                                    game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
+                                    -- Lọc ra mob còn sống
+                                    for i = #activeMobs, 1, -1 do
+                                        local m = activeMobs[i]
+                                        if not m or not m.Parent or m.Humanoid.Health <= 0 then
+                                            table.remove(activeMobs, i)
+                                        end
+                                    end
+                                until not _G.AutoFarm or #activeMobs == 0 or not questGui.Visible
                             end
                             
                             if not game:GetService("Workspace").Enemies:FindFirstChild(MonNew) then
@@ -4262,28 +4231,48 @@ spawn(function()
                         if game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == true then
                             if not string.find(l_Text_0, "kissed") then
                                 if game:GetService("Workspace").Enemies:FindFirstChild(Mon) then
+                                    -- Multi-mob: gom tối đa theo BringMobCount
+                                    local MAX_MOBS = _G.BringMobCount or 6
+                                    local activeMobs = {}
                                     for _, v512 in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                                        if #activeMobs >= MAX_MOBS then break end
                                         if v512:FindFirstChild("HumanoidRootPart") and v512:FindFirstChild("Humanoid") and v512.Humanoid.Health > 0 and v512.Name == Mon then
-                                            if not string.find(l_Text_0, NameMon) then
-                                                StartBring = false
-                                                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("AbandonQuest")
-                                            else
-                                                repeat
-                                                    task.wait()
-                                                    EquipWeapon(_G.SelectWeapon)
-                                                    AutoHaki()
-                                                    PosMon = v512.HumanoidRootPart.CFrame
-                                                    topos(v512.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                                                    v512.HumanoidRootPart.CanCollide = false
-                                                    v512.Humanoid.WalkSpeed = 0
-                                                    v512.Head.CanCollide = false
-                                                    v512.HumanoidRootPart.Size = Vector3.new(70, 70, 70)
-                                                    StartBring = true
-                                                    MonFarm = v512.Name
-                                                    game:GetService("VirtualUser"):CaptureController()
-                                                    game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
-                                                until not _G.AutoFarm or v512.Humanoid.Health <= 0 or not v512.Parent or game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == false
-                                            end
+                                            table.insert(activeMobs, v512)
+                                        end
+                                    end
+                                    if #activeMobs > 0 then
+                                        if not string.find(l_Text_0, NameMon) then
+                                            StartBring = false
+                                            game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("AbandonQuest")
+                                        else
+                                            local centerMob = activeMobs[1]
+                                            repeat
+                                                task.wait()
+                                                EquipWeapon(_G.SelectWeapon)
+                                                AutoHaki()
+                                                -- Gom tất cả mob về cùng 1 vị trí
+                                                for _, mob in ipairs(activeMobs) do
+                                                    if mob and mob.Parent and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
+                                                        mob.HumanoidRootPart.CFrame = centerMob.HumanoidRootPart.CFrame
+                                                        mob.HumanoidRootPart.CanCollide = false
+                                                        mob.Humanoid.WalkSpeed = 0
+                                                        mob.Head.CanCollide = false
+                                                    end
+                                                end
+                                                PosMon = centerMob.HumanoidRootPart.CFrame
+                                                topos(centerMob.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
+                                                StartBring = true
+                                                MonFarm = centerMob.Name
+                                                game:GetService("VirtualUser"):CaptureController()
+                                                game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
+                                                -- Lọc mob còn sống
+                                                for i = #activeMobs, 1, -1 do
+                                                    local m = activeMobs[i]
+                                                    if not m or not m.Parent or m.Humanoid.Health <= 0 then
+                                                        table.remove(activeMobs, i)
+                                                    end
+                                                end
+                                            until not _G.AutoFarm or #activeMobs == 0 or game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == false
                                         end
                                     end
                                 else
@@ -10488,48 +10477,43 @@ _G.BringMobCount = 6
 v496:AddDropdown({
     Name = "Bring Mob Count",
     Description = "Số quái gom lại mỗi lần (mặc định: 6)",
-    Options = {"2", "3", "4", "5", "6"},
+    Options = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
     Default = "6",
     Callback = function(val)
         _G.BringMobCount = tonumber(val) or 6
     end
 })
-
--- ===== BRING MOB: gom đủ số quái rồi mới đánh cùng lúc =====
 spawn(function()
-    while task.wait(0.05) do
+    while task.wait() do
         pcall(function()
-            if not _G.BringMonster then return end
-            if not PosMon then return end
-
-            local targetName = MonFarm or Mon
-            if not targetName then return end
-
-            local maxCount = _G.BringMobCount or 6
-            local gathered = 0
-
-            -- Bước 1: Gom tất cả quái trong vùng về 1 điểm (PosMon)
-            for _, mob in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
-                if gathered >= maxCount then break end
-                if mob.Name == targetName
-                    and mob:FindFirstChild("Humanoid")
-                    and mob:FindFirstChild("HumanoidRootPart")
-                    and mob.Humanoid.Health > 0
-                    and (mob.HumanoidRootPart.Position - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <= 500
-                then
-                    -- Vô hiệu hóa di chuyển và kéo về điểm farm
-                    mob.HumanoidRootPart.CanCollide = false
-                    mob.Head.CanCollide = false
-                    mob.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
-                    mob.Humanoid.WalkSpeed = 0
-                    mob.HumanoidRootPart.CFrame = PosMon
-                    if mob.Humanoid:FindFirstChild("Animator") then
-                        mob.Humanoid.Animator:Destroy()
-                    end
-                    pcall(function()
+            CheckQuest()
+            local broughtCount = 0
+            for _, v1167 in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                if broughtCount >= (_G.BringMobCount or 6) then break end
+                if _G.BringMonster and (StartBring and v1167.Name == MonFarm or v1167.Name == Mon and v1167:FindFirstChild("Humanoid") and v1167:FindFirstChild("HumanoidRootPart") and v1167.Humanoid.Health > 0 and (v1167.HumanoidRootPart.Position - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <= 320) then
+                    if v1167.Name == "Factory Staff" then
+                        if (v1167.HumanoidRootPart.Position - PosMon.Position).Magnitude <= 250 then
+                            v1167.Head.CanCollide = false
+                            v1167.HumanoidRootPart.CanCollide = false
+                            v1167.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                            v1167.HumanoidRootPart.CFrame = PosMon
+                            if v1167.Humanoid:FindFirstChild("Animator") then
+                                v1167.Humanoid.Animator:Destroy()
+                            end
+                            sethiddenproperty(game:GetService("Players").LocalPlayer, "SimulationRadius", math.huge)
+                            broughtCount = broughtCount + 1
+                        end
+                    elseif (v1167.Name == MonFarm or v1167.Name == Mon) and (v1167.HumanoidRootPart.Position - PosMon.Position).Magnitude <= 320 then
+                        v1167.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                        v1167.HumanoidRootPart.CFrame = PosMon
+                        v1167.HumanoidRootPart.CanCollide = false
+                        v1167.Head.CanCollide = false
+                        if v1167.Humanoid:FindFirstChild("Animator") then
+                            v1167.Humanoid.Animator:Destroy()
+                        end
                         sethiddenproperty(game.Players.LocalPlayer, "SimulationRadius", math.huge)
-                    end)
-                    gathered = gathered + 1
+                        broughtCount = broughtCount + 1
+                    end
                 end
             end
         end)
