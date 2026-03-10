@@ -3787,9 +3787,10 @@ task.spawn(function()
         if not screenGui then return end
         local mainFrame = screenGui:FindFirstChildOfClass("Frame")
         if not mainFrame then return end
-
-        -- Clamp vị trí khi buông chuột
+        local TweenService = game:GetService("TweenService")
         local UserInputService = game:GetService("UserInputService")
+
+        -- Clamp vị trí khi buông chuột (fix dính lên trên)
         UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 task.wait(0.05)
@@ -3798,22 +3799,60 @@ task.spawn(function()
                     local pos = mainFrame.Position
                     local absSize = mainFrame.AbsoluteSize
                     local newX = math.clamp(pos.X.Offset, 0, vp.X - absSize.X)
-                    local newY = math.clamp(pos.Y.Offset, 0, vp.Y - absSize.Y)
-                    mainFrame.Position = UDim2.new(0, newX, 0, newY)
+                    local newY = math.clamp(pos.Y.Offset, 30, vp.Y - absSize.Y)
+                    TweenService:Create(mainFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        Position = UDim2.new(0, newX, 0, newY)
+                    }):Play()
                 end)
             end
         end)
     end)
 end)
 
--- [PATCH 3] Dấu gạch tab indicator + màu hồng toggle
+-- [PATCH 3] Fix dính lên trên: ClipsDescendants + CanvasPosition reset cho tất cả ScrollingFrame
+task.spawn(function()
+    task.wait(2.5)
+    pcall(function()
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+
+        -- Fix tất cả ScrollingFrame: bật ClipsDescendants, reset CanvasPosition về 0
+        for _, obj in pairs(screenGui:GetDescendants()) do
+            if obj:IsA("ScrollingFrame") then
+                obj.ClipsDescendants = true
+                obj.CanvasPosition = Vector2.new(0, 0)
+            end
+            -- Fix Frame con bị tràn lên trên
+            if obj:IsA("Frame") and obj.ClipsDescendants == false then
+                obj.ClipsDescendants = true
+            end
+        end
+
+        -- Khi đổi tab: reset CanvasPosition về đầu (không bị nhảy giữa chừng)
+        for _, tabBtn in pairs(screenGui:GetDescendants()) do
+            if (tabBtn:IsA("TextButton") or tabBtn:IsA("ImageButton")) and tabBtn.Parent and tabBtn.Parent.Name and string.find(string.lower(tabBtn.Parent.Name), "tab") then
+                tabBtn.MouseButton1Click:Connect(function()
+                    task.wait(0.05)
+                    pcall(function()
+                        for _, sf in pairs(screenGui:GetDescendants()) do
+                            if sf:IsA("ScrollingFrame") and sf.Visible then
+                                sf.CanvasPosition = Vector2.new(0, 0)
+                            end
+                        end
+                    end)
+                end)
+            end
+        end
+    end)
+end)
+
+-- [PATCH 4] Tab indicator + màu chủ đề
 task.spawn(function()
     task.wait(2)
     pcall(function()
         local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
         if not screenGui then return end
 
-        -- Đổi màu toggle đang bật thành màu chủ đề
         for _, obj in pairs(screenGui:GetDescendants()) do
             if (obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG") and (obj:IsA("Frame") or obj:IsA("TextButton")) then
                 obj.BackgroundColor3 = _G.RedzThemeColor
@@ -3823,7 +3862,6 @@ task.spawn(function()
             end
         end
 
-        -- Dấu gạch trước tab được chọn
         local tabList = screenGui:FindFirstChild("TabList", true)
         if tabList then
             local lastIndicator = nil
@@ -3850,6 +3888,77 @@ task.spawn(function()
                     end)
                 end
             end
+        end
+    end)
+end)
+
+-- [PATCH 5] Hiệu ứng động mượt: hover button + tween tab switch
+_G.RedzAnimEnabled = true
+task.spawn(function()
+    task.wait(3)
+    pcall(function()
+        local TweenService = game:GetService("TweenService")
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+
+        local function applyHoverAnim(btn)
+            if not btn:IsA("TextButton") and not btn:IsA("ImageButton") then return end
+            local origColor = btn.BackgroundColor3
+            local origSize = btn.Size
+            btn.MouseEnter:Connect(function()
+                if not _G.RedzAnimEnabled then return end
+                pcall(function()
+                    TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(origSize.X.Scale, origSize.X.Offset, origSize.Y.Scale, origSize.Y.Offset + 2),
+                        BackgroundTransparency = math.max(0, btn.BackgroundTransparency - 0.05)
+                    }):Play()
+                end)
+            end)
+            btn.MouseLeave:Connect(function()
+                if not _G.RedzAnimEnabled then return end
+                pcall(function()
+                    TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        Size = origSize,
+                        BackgroundTransparency = btn.BackgroundTransparency
+                    }):Play()
+                end)
+            end)
+            btn.MouseButton1Down:Connect(function()
+                if not _G.RedzAnimEnabled then return end
+                pcall(function()
+                    TweenService:Create(btn, TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                        Size = UDim2.new(origSize.X.Scale, origSize.X.Offset - 2, origSize.Y.Scale, origSize.Y.Offset - 2)
+                    }):Play()
+                end)
+            end)
+            btn.MouseButton1Up:Connect(function()
+                if not _G.RedzAnimEnabled then return end
+                pcall(function()
+                    TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                        Size = origSize
+                    }):Play()
+                end)
+            end)
+        end
+
+        -- Áp dụng hover cho tất cả button hiện có
+        for _, obj in pairs(screenGui:GetDescendants()) do
+            pcall(applyHoverAnim, obj)
+        end
+
+        -- Áp dụng cho button được tạo sau
+        screenGui.DescendantAdded:Connect(function(obj)
+            task.wait(0.1)
+            pcall(applyHoverAnim, obj)
+        end)
+
+        -- Tween mượt khi mở menu lần đầu
+        local mainFrame = screenGui:FindFirstChildOfClass("Frame")
+        if mainFrame and _G.RedzAnimEnabled then
+            mainFrame.Size = UDim2.new(mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, 0, 0)
+            TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.new(mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, mainFrame.Size.Y.Scale, mainFrame.AbsoluteSize.Y)
+            }):Play()
         end
     end)
 end)
@@ -10280,6 +10389,16 @@ v496:AddTextBox({
             end
         end
     })
+-- Animation toggle
+v496:AddToggle({
+    Name = "Animation Effects",
+    Description = "Bật/tắt hiệu ứng động mượt cho toàn bộ giao diện",
+    Default = true,
+    Callback = function(value)
+        _G.RedzAnimEnabled = value
+    end
+})
+
 v496:AddButton({
     Title = "Join Clipboard",
     Description = "Join server from copied JobId",
