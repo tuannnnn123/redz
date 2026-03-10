@@ -3782,8 +3782,11 @@ end
 
 local function ApplyThemeToAll()
     local color = _G.RedzThemeColor
-    -- Tìm GUI trong CoreGui và PlayerGui
-    for _, guiParent in ipairs({game:GetService("CoreGui"), game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")}) do
+    local guiParents = {game:GetService("CoreGui")}
+    pcall(function()
+        table.insert(guiParents, game:GetService("Players").LocalPlayer.PlayerGui)
+    end)
+    for _, guiParent in ipairs(guiParents) do
         for _, gui in ipairs(guiParent:GetChildren()) do
             pcall(function()
                 for _, obj in ipairs(gui:GetDescendants()) do
@@ -3799,11 +3802,22 @@ end
 
 -- Hook DescendantAdded để bắt màu ngay khi UI tạo ra
 task.spawn(function()
-    for _, guiParent in ipairs({game:GetService("CoreGui"), game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")}) do
+    local ok1, playerGui = pcall(function()
+        return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 10)
+    end)
+    local coreGui = game:GetService("CoreGui")
+    
+    local function hookGui(guiParent)
+        if not guiParent then return end
         guiParent.DescendantAdded:Connect(function(obj)
             task.wait()
             ApplyColorToObj(obj, _G.RedzThemeColor)
         end)
+    end
+    
+    hookGui(coreGui)
+    if ok1 and playerGui then
+        hookGui(playerGui)
     end
 end)
 
