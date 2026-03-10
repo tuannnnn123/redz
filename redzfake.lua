@@ -3739,9 +3739,121 @@ end
 local vu32 = loadstring(game:HttpGet("https://raw.githubusercontent.com/PlockScripts/Library-ui/refs/heads/main/redz-V5-remake/main.luau"))()
 local v466 = vu32:MakeWindow({
     Title = "redz hub [ BETA ACCESS ] : Blox Fruits",
-    SubTitle = "remake version",
+    SubTitle = "tuann x nduc",
     SaveFolder = "Redz | redz lib v5.lua"
 })
+
+-- ===== REDZ HUB PATCHES =====
+
+-- [PATCH 1] Màu chủ đề (mặc định hồng)
+local ThemeColors = {
+    ["Pink"]   = Color3.fromRGB(255, 105, 180),
+    ["Blue"]   = Color3.fromRGB(80, 160, 255),
+    ["Yellow"] = Color3.fromRGB(255, 220, 50),
+    ["Red"]    = Color3.fromRGB(220, 60, 60),
+    ["Purple"] = Color3.fromRGB(160, 80, 220),
+    ["Orange"] = Color3.fromRGB(255, 140, 0),
+    ["Gray"]   = Color3.fromRGB(160, 160, 160),
+}
+_G.RedzThemeColor = ThemeColors["Pink"]
+
+local function ApplyThemeColor(color)
+    _G.RedzThemeColor = color
+    -- Áp dụng màu lên tất cả các toggle/button đang bật trong UI
+    pcall(function()
+        local gui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not gui then return end
+        for _, obj in pairs(gui:GetDescendants()) do
+            if obj:IsA("Frame") or obj:IsA("TextButton") then
+                if obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG" or obj.Name == "Indicator" then
+                    obj.BackgroundColor3 = color
+                end
+                if obj:IsA("TextButton") and obj.Name == "ActiveBtn" then
+                    obj.BackgroundColor3 = color
+                end
+            end
+            if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                obj.Color = color
+            end
+        end
+    end)
+end
+
+-- [PATCH 2] Fix window bị kéo ra ngoài màn hình
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+        local mainFrame = screenGui:FindFirstChildOfClass("Frame")
+        if not mainFrame then return end
+
+        -- Clamp vị trí khi buông chuột
+        local UserInputService = game:GetService("UserInputService")
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                task.wait(0.05)
+                pcall(function()
+                    local vp = workspace.CurrentCamera.ViewportSize
+                    local pos = mainFrame.Position
+                    local absSize = mainFrame.AbsoluteSize
+                    local newX = math.clamp(pos.X.Offset, 0, vp.X - absSize.X)
+                    local newY = math.clamp(pos.Y.Offset, 0, vp.Y - absSize.Y)
+                    mainFrame.Position = UDim2.new(0, newX, 0, newY)
+                end)
+            end
+        end)
+    end)
+end)
+
+-- [PATCH 3] Dấu gạch tab indicator + màu hồng toggle
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib") or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+        if not screenGui then return end
+
+        -- Đổi màu toggle đang bật thành màu chủ đề
+        for _, obj in pairs(screenGui:GetDescendants()) do
+            if (obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG") and (obj:IsA("Frame") or obj:IsA("TextButton")) then
+                obj.BackgroundColor3 = _G.RedzThemeColor
+            end
+            if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                obj.Color = _G.RedzThemeColor
+            end
+        end
+
+        -- Dấu gạch trước tab được chọn
+        local tabList = screenGui:FindFirstChild("TabList", true)
+        if tabList then
+            local lastIndicator = nil
+            for _, tabBtn in pairs(tabList:GetChildren()) do
+                if tabBtn:IsA("TextButton") or tabBtn:IsA("Frame") then
+                    local indicator = Instance.new("Frame")
+                    indicator.Name = "RedzTabIndicator"
+                    indicator.Size = UDim2.new(0, 4, 0.7, 0)
+                    indicator.Position = UDim2.new(0, 0, 0.15, 0)
+                    indicator.BackgroundColor3 = _G.RedzThemeColor
+                    indicator.BorderSizePixel = 0
+                    indicator.Visible = false
+                    indicator.ZIndex = tabBtn.ZIndex + 1
+                    local corner = Instance.new("UICorner")
+                    corner.CornerRadius = UDim.new(0, 3)
+                    corner.Parent = indicator
+                    indicator.Parent = tabBtn
+
+                    tabBtn.MouseButton1Click:Connect(function()
+                        if lastIndicator then lastIndicator.Visible = false end
+                        indicator.Visible = true
+                        indicator.BackgroundColor3 = _G.RedzThemeColor
+                        lastIndicator = indicator
+                    end)
+                end
+            end
+        end
+    end)
+end)
+-- ===== END PATCHES =====
 
 v466:AddMinimizeButton({
     Button = { Image = "rbxassetid://15298567397", BackgroundTransparency = 0 },
@@ -3766,6 +3878,24 @@ v484:AddDiscordInvite({
     Description = "Join server to receive Update",
     Logo = "rbxassetid://131723242350068",
     Invite = "https://discord.gg/BnEDf68jwx"
+})
+-- Fix nút Discord: nếu AddDiscordInvite không mở được link thì copy vào clipboard
+v484:AddButton({
+    Title = "📋 Copy Discord Link",
+    Description = "Bấm để copy link Discord vào clipboard",
+    Callback = function()
+        local link = "https://discord.gg/BnEDf68jwx"
+        if setclipboard then
+            setclipboard(link)
+        end
+        if vu32 and vu32.Notify then
+            vu32:Notify({
+                Title = "Discord",
+                Content = "Đã copy link: " .. link,
+                Duration = 4
+            })
+        end
+    end
 })
 _G.SelectWeapon = "Melee"
 task.spawn(function()
@@ -3832,6 +3962,50 @@ v485:AddDropdown({
             vu32:SetScale(300)  -- menor número = maior UI
         else
             vu32:SetScale(450)
+        end
+    end
+})
+
+-- ===== Chọn màu nút =====
+v485:AddDropdown({
+    Name = "Button Color",
+    Description = "Chọn màu cho các nút bật/tắt (mặc định: Pink)",
+    Options = {"Pink", "Blue", "Yellow", "Red", "Purple", "Orange", "Gray"},
+    Default = "Pink",
+    Callback = function(colorName)
+        local ThemeColors = {
+            ["Pink"]   = Color3.fromRGB(255, 105, 180),
+            ["Blue"]   = Color3.fromRGB(80, 160, 255),
+            ["Yellow"] = Color3.fromRGB(255, 220, 50),
+            ["Red"]    = Color3.fromRGB(220, 60, 60),
+            ["Purple"] = Color3.fromRGB(160, 80, 220),
+            ["Orange"] = Color3.fromRGB(255, 140, 0),
+            ["Gray"]   = Color3.fromRGB(160, 160, 160),
+        }
+        local color = ThemeColors[colorName] or ThemeColors["Pink"]
+        _G.RedzThemeColor = color
+
+        -- Áp dụng màu lên toàn bộ UI
+        pcall(function()
+            local screenGui = game:GetService("CoreGui"):FindFirstChild("RedzLib")
+                or game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("RedzLib")
+            if not screenGui then return end
+            for _, obj in pairs(screenGui:GetDescendants()) do
+                if (obj.Name == "ActiveColor" or obj.Name == "ToggleOn" or obj.Name == "ActiveBG" or obj.Name == "Indicator") and (obj:IsA("Frame") or obj:IsA("ImageLabel") or obj:IsA("TextButton")) then
+                    obj.BackgroundColor3 = color
+                end
+                if obj:IsA("UIStroke") and obj.Name == "ActiveStroke" then
+                    obj.Color = color
+                end
+                -- Cập nhật tab indicator
+                if obj.Name == "RedzTabIndicator" and obj:IsA("Frame") then
+                    obj.BackgroundColor3 = color
+                end
+            end
+        end)
+
+        if vu32 and vu32.Notify then
+            vu32:Notify({Title = "Theme", Content = "Đã đổi màu sang: " .. colorName, Duration = 3})
         end
     end
 })
@@ -10259,11 +10433,23 @@ v496:AddToggle({
         StopTween(_G.BringMonster)
     end
 })
+_G.BringMobCount = 6
+v496:AddDropdown({
+    Name = "Bring Mob Count",
+    Description = "Số quái gom lại mỗi lần (mặc định: 6)",
+    Options = {"2", "3", "4", "5", "6"},
+    Default = "6",
+    Callback = function(val)
+        _G.BringMobCount = tonumber(val) or 6
+    end
+})
 spawn(function()
     while task.wait() do
         pcall(function()
             CheckQuest()
+            local broughtCount = 0
             for _, v1167 in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                if broughtCount >= (_G.BringMobCount or 6) then break end
                 if _G.BringMonster and (StartBring and v1167.Name == MonFarm or v1167.Name == Mon and v1167:FindFirstChild("Humanoid") and v1167:FindFirstChild("HumanoidRootPart") and v1167.Humanoid.Health > 0 and (v1167.HumanoidRootPart.Position - game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <= 320) then
                     if v1167.Name == "Factory Staff" then
                         if (v1167.HumanoidRootPart.Position - PosMon.Position).Magnitude <= 250 then
@@ -10275,6 +10461,7 @@ spawn(function()
                                 v1167.Humanoid.Animator:Destroy()
                             end
                             sethiddenproperty(game:GetService("Players").LocalPlayer, "SimulationRadius", math.huge)
+                            broughtCount = broughtCount + 1
                         end
                     elseif (v1167.Name == MonFarm or v1167.Name == Mon) and (v1167.HumanoidRootPart.Position - PosMon.Position).Magnitude <= 320 then
                         v1167.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
@@ -10285,6 +10472,7 @@ spawn(function()
                             v1167.Humanoid.Animator:Destroy()
                         end
                         sethiddenproperty(game.Players.LocalPlayer, "SimulationRadius", math.huge)
+                        broughtCount = broughtCount + 1
                     end
                 end
             end
