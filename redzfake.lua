@@ -4174,44 +4174,32 @@ spawn(function()
                             StartBring = false
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
                         else
-                            -- Multi-mob: gom tối đa theo BringMobCount
-                            local MAX_MOBS = _G.BringMobCount or 6
-                            local activeMobs = {}
-                            for _, mob in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
-                                if #activeMobs >= MAX_MOBS then break end
-                                if mob.Name == MonNew and mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
-                                    table.insert(activeMobs, mob)
+                            -- Lấy vị trí cố định để gom mob
+                            local firstMobNew = game:GetService("Workspace").Enemies:FindFirstChild(MonNew)
+                            local attackCFrameNew = (firstMobNew and firstMobNew:FindFirstChild("HumanoidRootPart")) and firstMobNew.HumanoidRootPart.CFrame or CFrameMonNew
+                            StartBring = true
+                            MonFarm = MonNew
+                            repeat
+                                task.wait()
+                                EquipWeapon(_G.SelectWeapon)
+                                AutoHaki()
+                                -- Mỗi tick quét lại toàn bộ mob, gom hết về attackCFrameNew
+                                local MAX_MOBS = _G.BringMobCount or 6
+                                local count = 0
+                                for _, mob in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                                    if count >= MAX_MOBS then break end
+                                    if mob.Name == MonNew and mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+                                        mob.HumanoidRootPart.CFrame = attackCFrameNew
+                                        mob.HumanoidRootPart.CanCollide = false
+                                        mob.Head.CanCollide = false
+                                        mob.Humanoid.WalkSpeed = 0
+                                        count = count + 1
+                                    end
                                 end
-                            end
-                            if #activeMobs > 0 then
-                                local centerMob = activeMobs[1]
-                                repeat
-                                    task.wait()
-                                    EquipWeapon(_G.SelectWeapon)
-                                    AutoHaki()
-                                    -- Gom tất cả mob về 1 điểm
-                                    for _, mob in ipairs(activeMobs) do
-                                        if mob and mob.Parent and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
-                                            mob.HumanoidRootPart.CFrame = centerMob.HumanoidRootPart.CFrame
-                                            mob.HumanoidRootPart.CanCollide = false
-                                            mob.Humanoid.WalkSpeed = 0
-                                            mob.Head.CanCollide = false
-                                        end
-                                    end
-                                    topos(centerMob.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                                    StartBring = true
-                                    MonFarm = centerMob.Name
-                                    game:GetService("VirtualUser"):CaptureController()
-                                    game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
-                                    -- Lọc ra mob còn sống
-                                    for i = #activeMobs, 1, -1 do
-                                        local m = activeMobs[i]
-                                        if not m or not m.Parent or m.Humanoid.Health <= 0 then
-                                            table.remove(activeMobs, i)
-                                        end
-                                    end
-                                until not _G.AutoFarm or #activeMobs == 0 or not questGui.Visible
-                            end
+                                topos(attackCFrameNew * CFrame.new(0, 30, 0))
+                                game:GetService("VirtualUser"):CaptureController()
+                                game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
+                            until not _G.AutoFarm or not game:GetService("Workspace").Enemies:FindFirstChild(MonNew) or not questGui.Visible
                             
                             if not game:GetService("Workspace").Enemies:FindFirstChild(MonNew) then
                                 TweenTo(CFrameMonNew)
@@ -4231,50 +4219,38 @@ spawn(function()
                         if game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == true then
                             if not string.find(l_Text_0, "kissed") then
                                 if game:GetService("Workspace").Enemies:FindFirstChild(Mon) then
-                                    -- Multi-mob: gom tối đa theo BringMobCount
-                                    local MAX_MOBS = _G.BringMobCount or 6
-                                    local activeMobs = {}
-                                    for _, v512 in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
-                                        if #activeMobs >= MAX_MOBS then break end
-                                        if v512:FindFirstChild("HumanoidRootPart") and v512:FindFirstChild("Humanoid") and v512.Humanoid.Health > 0 and v512.Name == Mon then
-                                            table.insert(activeMobs, v512)
-                                        end
-                                    end
-                                    if #activeMobs > 0 then
-                                        if not string.find(l_Text_0, NameMon) then
+                                    -- Lấy vị trí cố định để gom mob
+                                    local firstMob = game:GetService("Workspace").Enemies:FindFirstChild(Mon)
+                                    local attackCFrame = (firstMob and firstMob:FindFirstChild("HumanoidRootPart")) and firstMob.HumanoidRootPart.CFrame or CFrameMon
+                                    PosMon = attackCFrame
+                                    StartBring = true
+                                    MonFarm = Mon
+                                    repeat
+                                        task.wait()
+                                        if not string.find(game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text, NameMon) then
                                             StartBring = false
                                             game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("AbandonQuest")
-                                        else
-                                            local centerMob = activeMobs[1]
-                                            repeat
-                                                task.wait()
-                                                EquipWeapon(_G.SelectWeapon)
-                                                AutoHaki()
-                                                -- Gom tất cả mob về cùng 1 vị trí
-                                                for _, mob in ipairs(activeMobs) do
-                                                    if mob and mob.Parent and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
-                                                        mob.HumanoidRootPart.CFrame = centerMob.HumanoidRootPart.CFrame
-                                                        mob.HumanoidRootPart.CanCollide = false
-                                                        mob.Humanoid.WalkSpeed = 0
-                                                        mob.Head.CanCollide = false
-                                                    end
-                                                end
-                                                PosMon = centerMob.HumanoidRootPart.CFrame
-                                                topos(centerMob.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                                                StartBring = true
-                                                MonFarm = centerMob.Name
-                                                game:GetService("VirtualUser"):CaptureController()
-                                                game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
-                                                -- Lọc mob còn sống
-                                                for i = #activeMobs, 1, -1 do
-                                                    local m = activeMobs[i]
-                                                    if not m or not m.Parent or m.Humanoid.Health <= 0 then
-                                                        table.remove(activeMobs, i)
-                                                    end
-                                                end
-                                            until not _G.AutoFarm or #activeMobs == 0 or game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == false
+                                            break
                                         end
-                                    end
+                                        EquipWeapon(_G.SelectWeapon)
+                                        AutoHaki()
+                                        -- Mỗi tick quét lại toàn bộ mob, gom hết về attackCFrame
+                                        local MAX_MOBS = _G.BringMobCount or 6
+                                        local count = 0
+                                        for _, v512 in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+                                            if count >= MAX_MOBS then break end
+                                            if v512.Name == Mon and v512:FindFirstChild("HumanoidRootPart") and v512:FindFirstChild("Humanoid") and v512.Humanoid.Health > 0 then
+                                                v512.HumanoidRootPart.CFrame = attackCFrame
+                                                v512.HumanoidRootPart.CanCollide = false
+                                                v512.Head.CanCollide = false
+                                                v512.Humanoid.WalkSpeed = 0
+                                                count = count + 1
+                                            end
+                                        end
+                                        topos(attackCFrame * CFrame.new(0, 30, 0))
+                                        game:GetService("VirtualUser"):CaptureController()
+                                        game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
+                                    until not _G.AutoFarm or not game:GetService("Workspace").Enemies:FindFirstChild(Mon) or game:GetService("Players").LocalPlayer.PlayerGui.Main.Quest.Visible == false
                                 else
                                     TP1(CFrameMon)
                                     StartBring = false
